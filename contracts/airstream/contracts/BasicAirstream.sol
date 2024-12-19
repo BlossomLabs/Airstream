@@ -13,11 +13,12 @@ import {IAirstream} from "./interfaces/IAirstream.sol";
 import {GDAv1Forwarder, PoolConfig} from "./interfaces/gdav1/GDAv1Forwarder.sol";
 import {ISuperfluidPool} from "./interfaces/gdav1/ISuperfluidPool.sol";
 import {Claimable} from "./abstract/Claimable.sol";
+import {Connectable} from "./abstract/Connectable.sol";
 import {Withdrawable} from "./abstract/Withdrawable.sol";
 import {AirstreamLib, AirstreamConfig, AirstreamExtendedConfig, ClaimingWindow} from "./libraries/AirstreamLib.sol";
 import {RedirectLib} from "./libraries/RedirectLib.sol";
 
-contract BasicAirstream is IAirstream, Initializable, PausableUpgradeable, OwnableUpgradeable, UUPSUpgradeable, Claimable, Withdrawable, ReentrancyGuardUpgradeable {
+contract BasicAirstream is IAirstream, Claimable, Connectable, Withdrawable, Initializable, PausableUpgradeable, OwnableUpgradeable, UUPSUpgradeable, ReentrancyGuardUpgradeable {
     using AirstreamLib for uint256;
     using RedirectLib for ISuperfluidPool;
 
@@ -147,8 +148,7 @@ contract BasicAirstream is IAirstream, Initializable, PausableUpgradeable, Ownab
     function getAllocation(address account) public view returns (uint256) {
         return AirstreamLib.fromPoolUnits(_pool.getUnits(account));
     }
-
-    function pool() public view returns (address) {
+    function pool() public view override(Connectable, IAirstream) returns (address) {
         return address(_pool);
     }
 

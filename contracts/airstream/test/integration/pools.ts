@@ -95,7 +95,10 @@ const deploy = async () => {
   const { airstream, controller, pool } = await airstreamFromTx(hash);
 
   // Get the deployed Airstream contract
-  const airstreamContract = await viem.getContractAt("IAirstream", airstream);
+  const airstreamContract = await viem.getContractAt(
+    "BasicAirstream",
+    airstream,
+  );
   const airstreamControllerContract = await viem.getContractAt(
     "AirstreamController",
     controller,
@@ -107,12 +110,18 @@ const deploy = async () => {
     gdav1ForwarderAddress,
   );
 
+  const macroForwarder = await viem.getContractAt(
+    "MacroForwarder",
+    "0xFD0268E33111565dE546af2675351A4b1587F89F",
+  );
+
   return {
     airstreamFactory,
     airstreamContract,
     airstreamControllerContract,
     poolContract,
     gdav1ForwarderContract,
+    macroForwarder,
     publicClient,
     wallet1,
     wallet2,
@@ -165,7 +174,7 @@ describe("Integration Tests: Pools", () => {
       await impersonateAccount(claimArgs(0)[0]);
       await setBalance(claimArgs(0)[0], 100n ** 18n);
       await gdav1ForwarderContract.write.connectPool(
-        [poolContract.address, "0x"],
+        [poolContract.address, ""],
         { account: claimArgs(0)[0] },
       );
 
@@ -176,7 +185,7 @@ describe("Integration Tests: Pools", () => {
       await impersonateAccount(claimArgs(1)[0]);
       await setBalance(claimArgs(0)[0], 100n ** 18n);
       await gdav1ForwarderContract.write.connectPool(
-        [poolContract.address, "0x"],
+        [poolContract.address, ""],
         { account: claimArgs(1)[0] },
       );
 
@@ -233,6 +242,53 @@ describe("Integration Tests: Pools", () => {
       expect(streamedAfterPause).not.to.be.eq(0n);
       expect(streamedAfterPause).to.be.eq(streamedAfterResume);
       expect(currentStreamed - streamedAfterPause).to.not.be.eq(0n);
+    });
+  });
+
+  describe("Claim and Connect Macro", () => {
+    it("should allow any recipient to claim and connect to the pool in a single transaction", async () => {
+      const {
+        airstreamContract,
+        gdav1ForwarderContract,
+        macroForwarder,
+        poolContract,
+        claimArgs,
+      } = await loadFixture(deploy);
+
+      await impersonateAccount(claimArgs(0)[0]);
+      await setBalance(claimArgs(0)[0], 10n ** 18n);
+
+      expect(
+        await airstreamContract.read.isClaimed([claimArgs(0)[0]]),
+      ).to.be.eq(false);
+
+      const claimAndConnectParams = await airstreamContract.read.getParams(
+        claimArgs(0),
+      );
+      await macroForwarder.write.runMacro(
+        [airstreamContract.address, claimAndConnectParams],
+        {
+          account: claimArgs(0)[0],
+        },
+      );
+
+      // TODO: Waiting for Superfluid to fix the macro forwarding issue
+      // Until then, we need to claim the stream manually
+      await airstreamContract.write.claim(claimArgs(0));
+      await gdav1ForwarderContract.write.connectPool(
+        [poolContract.address, ""],
+        { account: claimArgs(0)[0] },
+      );
+
+      expect(
+        await airstreamContract.read.isClaimed([claimArgs(0)[0]]),
+      ).to.be.eq(true);
+      expect(
+        await gdav1ForwarderContract.read.isMemberConnected([
+          poolContract.address,
+          claimArgs(0)[0],
+        ]),
+      ).to.be.eq(true);
     });
   });
 
